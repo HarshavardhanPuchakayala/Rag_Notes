@@ -1,0 +1,115 @@
+# import os
+# from dotenv import load_dotenv            # reads the .env file
+# from langchain_openai import ChatOpenAI   # LangChain's chat model wrapper
+# from langchain_community.document_loaders import TextLoader, PyPDFLoader, WebBaseLoader
+
+
+# from langchain_core.documents import Document
+# from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+
+# from langchain_huggingface import HuggingFaceEmbeddings
+
+# load_dotenv()  # load variables from .env into the environment
+
+# llm = ChatOpenAI(
+#     model="openai/gpt-4o-mini",               # model name from OpenRouter
+#     base_url="https://openrouter.ai/api/v1",  # send requests to OpenRouter
+#     api_key=os.getenv("OPENROUTER_API_KEY"),  # read the key safely
+# )
+
+# response = llm.invoke("Say hello in one short sentence.")  # first call
+# print(response.content)                                    # print the text
+
+# Create a small sample file so the code is runnable
+# with open("packages.txt", "w", encoding="utf-8") as f:
+#     f.write("Brightpath Digital packages:\nStarter: 500/month, SEO and 2 social posts per week.\n"
+#             "Growth: $999/month, SEO, ads management and 5 posts per week." )
+
+# # 1) TXT loader: reads a text file
+# docs=TextLoader("packages.txt", encoding="utf-8").load() # returns a list of Documents
+# print(len(docs))  # how many Documents we got
+# print(docs[0].page_content) # the text itself
+# print(docs[0].metadata)# where it came from
+
+
+
+
+# text="""
+# BrightPath Digital Refund Policy.
+# Refunds are available within 14 days of purchase for monthly packages.
+
+# Ad spend is never refundable because it is paid to third-party platforms.
+
+# Cancellation Policy.
+# You can cancel any package with 30 days written notice. No cancellation fee applies after the first 3 months.
+# """
+
+
+# doc=Document(page_content=text, metadata={"source":"policies.txt"})
+
+
+# # Create the splitter: small numbers so we can see the effect
+# splitter = RecursiveCharacterTextSplitter(
+#     chunk_size=150,     # max characters per chunk
+#     chunk_overlap=30,   # characters shared between neighbors
+# )
+
+# chunks = splitter.split_documents([doc])  # split Documents into smaller Documents
+
+# print("Number of chunks:", len(chunks))
+# for i, chunk in enumerate(chunks):
+#     print(f"\n--- Chunk {i} ({len(chunk.page_content)} chars) ---")
+#     print(chunk.page_content)
+#     print(chunk.metadata)
+
+
+
+
+# embeddings=HuggingFaceEmbeddings(
+#     model_name="sentence-transformers/all-MiniLM-L6-v2"
+# )
+
+# vector = embeddings.embed_query("what is the refund policy..?")
+# print("Vector length:", len(vector))   # how many numbers represent the meaning
+# print("First 5 numbers:", vector[:5])  # a peek at the numbers
+
+# # Embed MANY texts at once (this is what we will do for our chunks)
+# chunk_texts = [
+#     "Refunds are available within 14 days of purchase.",
+#     "The Growth package costs $999 per month.",
+# ]
+# vectors = embeddings.embed_documents(chunk_texts)  # one vector per text
+# print("Number of vectors:", len(vectors))
+
+
+
+
+from langchain_core.documents import Document
+from langchain_chroma import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+# Our chunks as Documents (text + metadata)
+chunks = [
+    Document(page_content="Refunds are available within 14 days of purchase.",
+             metadata={"source": "policies.txt"}),
+    Document(page_content="The Growth package costs $999 per month and includes ads management.",
+             metadata={"source": "packages.txt"}),
+    Document(page_content="You can cancel any package with 30 days written notice.",
+             metadata={"source": "policies.txt"}),
+]
+
+# Create the store: embeds every chunk and saves it to the ./chroma_db folder
+vector_store = Chroma.from_documents(
+    documents=chunks,                  # what to store
+    embedding=embeddings,              # how to turn text into vectors
+    persist_directory="./chroma_db",   # folder on disk where it is saved
+)
+
+result=vector_store.similarity_search("How can i get my money back",k=2
+)
+for r in result:
+    print(r.page_content, "|", r.metadata)
